@@ -2,7 +2,7 @@ This is a Python module for reading data from Daly BMS devices. It supports seri
 
 ## Compatibility
 
-There are two different types of devices sold under the Daly Brand, which use different communication protocols. 
+There are two different types of devices sold under the Daly Brand, which use different communication protocols.
 This module was initially written for BMS supported by the Windows program BMS monitor.
 Later (in #1) the support for BMS supported by the BMStool, also known as Sinowealth, was added. They don't support all commands of the first protocol, but still provide valuable information.
 
@@ -174,10 +174,71 @@ Send SOC data to a MQTT broker:
 
 ## Notes
 
+
 ### Bluetooth
+You can fetch the values via bluetooth with the instructions below, this was tested on a raspi zero
 
 - It's also recommended to have a recent BlueZ installed (>=5.53).
 
   The Bluetooth connection uses `asyncio` for the connection, so the data is received asynchronous.  
 
 - It seems like the Bluetooth BMS Module goes to sleep after 1 hour of inactivity (no load or charging), while the serial connection responds all the time. Sending a command via the serial interface wakes up the Bluetooth module.
+
+- Use the daly-bmsBT-cli to interact with your bluetooth, you will need to find the MAC address of your device
+```
+pi@pizero:~ $ bluetoothctl
+Agent registered
+[CHG] Controller B8:27:EB:AC:93:B5 Pairable: yes
+[bluetooth]# power on
+Failed to set power on: org.bluez.Error.Blocked
+[bluetooth]# scan on
+Failed to start discovery: org.bluez.Error.NotReady
+[bluetooth]# exit
+pi@pizero:~ $ rfkill list
+0: phy0: Wireless LAN
+	Soft blocked: no
+	Hard blocked: no
+1: hci0: Bluetooth
+	Soft blocked: yes
+	Hard blocked: no
+pi@pizero:~ $ rfkill unblock bluetooth
+pi@pizero:~ $ rfkill list
+  0: phy0: Wireless LAN
+  	Soft blocked: no
+  	Hard blocked: no
+  1: hci0: Bluetooth
+  	Soft blocked: no
+  	Hard blocked: no
+pi@pizero:~ $ bluetoothctl
+Agent registered
+[CHG] Controller B8:27:EB:AC:93:B5 Pairable: yes
+[bluetooth]# power on
+Changing power on succeeded
+[bluetooth]# scan on
+Discovery started
+[CHG] Controller B8:27:EB:AC:93:B5 Discovering: yes
+[NEW] Device 02:11:23:34:7D:88 DL-021123347D88
+[NEW] Device A0:9E:1A:61:8B:37 Polar Vantage M 62C
+[NEW] Device 58:7E:61:4D:0A:DB 58-7E-61-4D-0A-DB
+[bluetooth]# exit
+```
+I spot the MAC of my Daly it is this line  [NEW] Device 02:11:23:34:7D:88 DL-021123347D88
+Test the output to screen
+```
+./daly-bmsBT-cli --all -d 02:11:23:34:7D:88
+```
+This is the command to populate your homeassistant, you should setup a systemd service for this
+```
+./daly-bmsBT-cli --all --mqtt --mqtt-hass --mqtt-user yourrmqttuser --mqtt-password yourmqttpassword --mqtt-broker 192.168.2.21 -d 02:11:23:34:7D:88
+```
+Setting up the bluetooth as a systemd Service
+```
+pi@pizero:~/python-daly-bms $  sudo cp service/dalybt.service /etc/systemd/system/
+pi@pizero:~/python-daly-bms $ sudo cp service/dalybt.conf /etc/
+```
+Now edit the options to setup your mqtt server in the /etc/dalybt.conf filename
+```
+sudo systemctl start dalybt
+sudo systemctl enable dalybt
+```
+Your system should now automatically start the service when booting
